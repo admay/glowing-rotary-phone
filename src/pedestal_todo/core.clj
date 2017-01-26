@@ -15,7 +15,7 @@
    :enter
    (fn [context]
      (let [request (context :request) ;; why even bother?
-           response (ok contest)]
+           response (ok context)]
        (assoc context :response response)))})
 
 (def routes
