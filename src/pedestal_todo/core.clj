@@ -4,7 +4,7 @@
             [io.pedestal.test :as test]))
 
 (defn response [status body & {:as headers}]
-  {:status status :body body :headers headers})
+  {:status status :body (with-out-str (pprint body)) :headers headers})
 
 (def ok       (partial response 200))
 (def created  (partial response 201))
