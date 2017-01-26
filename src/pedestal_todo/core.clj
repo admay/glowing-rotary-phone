@@ -10,6 +10,14 @@
 (def created  (partial response 201))
 (def accepted (partial response 202))
 
+(def echo
+  {:name :echo
+   :enter
+   (fn [context]
+     (let [request (context :request) ;; why even bother?
+           response (ok contest)]
+       (assoc context :response response)))})
+
 (def routes
   (route/expand-routes
    #{["/todo"                 :post   echo :route-name :list-create]
