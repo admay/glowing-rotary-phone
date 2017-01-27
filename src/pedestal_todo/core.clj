@@ -156,3 +156,112 @@
 
 (defn test-request [verb url]
   (io.pedestal.test/response-for (::http/service-fn @server) verb url))
+
+(comment
+
+  Notes on routes with pedestal.
+
+  Bare minimum
+  ["/users" :get view-users]
+  ["/route" :type handler-function]
+
+  *:type can be :get, :post, :put, :delete, :options, :head, :any, or :options
+
+  *The handler can be either a fully defined interceptor or a function that returns one.
+  ["/users" :get (view-users db-conn)]
+
+  *You can also pass in a vector of handlers to chain interceptors
+  ["/users" :post [create-entity (db-interceptor db-conn) store-entity]]
+
+  *Anonymous functions can also be used as handlers
+  ["/echo" :get (fn [body] {:status 200 :body body}) :route-name :echo]
+
+  *Single path parameters are denoted in the route as keywords
+  ["/users/:user-id" :get view-user]
+
+  *The request will then contain a map called path-params that looks like,
+  {:path-params {:user-id "foobar"}}
+
+  *Using an asterisk will catch-all params
+  ["/users/:user-id/profile/*subpage" :get view-user-resource]
+
+  {:path-params {:user-id "foobar" :subpage "photos/summer.jpg"}}
+
+  *Query parameters are stored in the :query-params map
+  "http://website.io/search?q=science" => {:query-params {:q "science"}}
+
+  *Since things like adding DB connections and auth are so common...
+  (def common-interceptors [inject-connect authorize-user ])
+
+  ["/user/:user-id/settings" :post (conj common-interceptors view-user-settings)]
+
+  *You can also constrain the routes
+  ["/users/:user-id" :get view-user :constraints {:user-id #"[0-9]+"}]
+
+  (def numeric #"[0-9]+")
+  (def user-id {:user-id numeric})
+
+  ["/user/:user-id" :get  view-user   :constraints user-id]
+  ["/user/:user-id" :post update-user :constraints user-id]
+
+  *Constraints are used only to reject bad requests
+
+  *Routes must have names. If you don't provide one, pedestal will use the name of the
+  *last interceptor in the chain.
+  ["/user" :get view-user :route-name :view-user-profile]
+  ["/user" :get view-user] => :route-name will be :view-user
+
+  *There is an order to this:
+  1. Path
+  2. Verb
+  3. Interceptors
+  4. Route name
+  5. Constraints
+
+  * This won't work in table syntax. Both rows get the same automatic
+  * route name.
+  ["/users" :get user-api-handler]
+  ["/users" :post user-api-handler]
+
+  *Instead, define your own route names
+  ["/users" :get  user-api-handler :route-name :users-view]
+  ["/users" :post user-api-handler :route-name :user-create]
+
+  *If one routes has multiple verbs, you can define them using a map
+  ["/users" {:get user-api-handler
+             :post [:create-user user-api-handler]}]
+
+  *Route tables are also used for URL generation
+
+  *The `url-for-routes` function takes a parsed route table and returns a URL generating function
+  (def app-routes
+    (table/table-routes
+     {}
+     [["/user"                   :get  user-search-form]
+      ["/user/:user-id"          :get  view-user        :route-name :show-user-profile]
+      ["/user/:user-id/timeline" :post post-timeline    :route-name :timeline]
+      ["/user/:user-id/profile"  :put  update-profile]]))
+
+  (def url-for (route/url-for-routes app-routes))
+
+  (url-for :user-search-form)
+  ;; => "/user"
+
+  (url-for :view-user :params {:user-id "foobar"})
+  ;; => "/user/foobar"
+
+  *url-for only provides a URL, not a complete action
+  *form-action-for-routes can be used for that
+  (def form-action (route/form-action-for-routes app-routes))
+  (form-action :timeline :params {:user-id "foobar"})
+  ;; => {:method "post", :action "/user/:user-id/timelie"}
+
+  *If the action is anything other than get or post, it'll be converted to post
+  *with the true action added as a query parameter
+  (form-action :update-profile :params {:user-id 12345})
+  ;; => {:method "post", :action "/user/12345/profile?_method=put"}
+
+  *Map tree router is the fastest router in Pedestal.
+  *It forbids dynamic path segments like wildcards and path parameters
+  *If any of those are used, the prefix tree routers will be used instead.
+)
